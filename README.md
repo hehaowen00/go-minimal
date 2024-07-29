@@ -1,2 +1,3 @@
 # go-minimal
-minimal go webframework
+
+Minimal web framework for go built on top of the standard library 
