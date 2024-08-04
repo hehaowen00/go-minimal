@@ -2,12 +2,13 @@ package main
 
 import (
 	"context"
-	minimal "go-minimal"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
+
+	minimal "github.com/hehaowen00/go-minimal"
 )
 
 func main() {
