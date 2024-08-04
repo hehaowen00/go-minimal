@@ -35,60 +35,62 @@ func (r *Router) ServeTLS(addr string, cert, key string) error {
 }
 
 func (r *Router) GET(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
-	for i := range middleware {
-		handler = middleware[len(middleware)-1-i](handler)
+	handler = applyMiddleware(handler, middleware, r.middleware)
+	r.route(http.MethodGet, path, handler)
+}
+
+func (r *Router) POST(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
+	handler = applyMiddleware(handler, middleware, r.middleware)
+	r.route(http.MethodPost, path, handler)
+}
+
+func (r *Router) PUT(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
+	handler = applyMiddleware(handler, middleware, r.middleware)
+	r.route(http.MethodPut, path, handler)
+}
+
+func (r *Router) PATCH(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
+	handler = applyMiddleware(handler, middleware, r.middleware)
+	r.route(http.MethodPatch, path, handler)
+}
+
+func (r *Router) DELETE(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
+	handler = applyMiddleware(handler, middleware, r.middleware)
+	r.route(http.MethodDelete, path, handler)
+}
+
+func (r *Router) HEAD(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
+	handler = applyMiddleware(handler, middleware, r.middleware)
+	r.route(http.MethodHead, path, handler)
+}
+
+func (r *Router) OPTIONS(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
+	handler = applyMiddleware(handler, middleware, r.middleware)
+	r.route(http.MethodOptions, path, handler)
+}
+
+func (r *Router) CONNECT(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
+	handler = applyMiddleware(handler, middleware, r.middleware)
+	r.route(http.MethodConnect, path, handler)
+}
+
+func applyMiddleware(
+	handler http.HandlerFunc,
+	m1 []MiddlewareFunc,
+	m2 []MiddlewareFunc,
+) http.HandlerFunc {
+	for i := range m1 {
+		handler = m1[len(m1)-1-i](handler)
 	}
 
-	for _, h := range r.middleware {
+	for _, h := range m2 {
 		handler = h(handler)
 	}
 
-	r.route(http.MethodGet, path, handler)
+	return handler
 }
 
 func (r *Router) route(method string, path string, handler http.HandlerFunc) {
 	path = strings.TrimSpace(path)
 	r.mux.Handle(method, path, handler)
-}
-
-type customMux struct {
-	getHandler    *http.ServeMux
-	postHandler   *http.ServeMux
-	putHandler    *http.ServeMux
-	deleteHandler *http.ServeMux
-}
-
-func (mux *customMux) Handle(method string, path string, handler http.Handler) {
-	switch method {
-	case http.MethodGet:
-		if mux.getHandler == nil {
-			mux.getHandler = http.NewServeMux()
-		}
-		mux.getHandler.Handle(path, handler)
-	case http.MethodPost:
-		if mux.postHandler == nil {
-			mux.postHandler = http.NewServeMux()
-		}
-		mux.postHandler.Handle(path, handler)
-	}
-}
-
-func (mux *customMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		if mux.getHandler == nil {
-			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte(http.StatusText(http.StatusNotFound)))
-		}
-		mux.getHandler.ServeHTTP(w, r)
-	case http.MethodPost:
-		if mux.postHandler == nil {
-			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte(http.StatusText(http.StatusNotFound)))
-		}
-		mux.postHandler.ServeHTTP(w, r)
-	default:
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(http.StatusText(http.StatusNotFound)))
-	}
 }
