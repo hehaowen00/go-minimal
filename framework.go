@@ -14,7 +14,9 @@ type Router struct {
 
 func NewRouter() *Router {
 	return &Router{
-		mux: &customMux{},
+		mux: &customMux{
+			optionsMap: make(map[string][]string),
+		},
 	}
 }
 
@@ -24,12 +26,16 @@ func (r *Router) Use(middleware MiddlewareFunc) {
 
 func (r *Router) Serve(addr string) error {
 	mux := r.mux
+	mux.buildOptions()
+
 	r.mux = nil
 	return http.ListenAndServe(addr, mux)
 }
 
 func (r *Router) ServeTLS(addr string, cert, key string) error {
 	mux := r.mux
+	mux.buildOptions()
+
 	r.mux = nil
 	return http.ListenAndServeTLS(addr, cert, key, mux)
 }

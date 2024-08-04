@@ -1,6 +1,9 @@
 package gominimal
 
-import "net/http"
+import (
+	"net/http"
+	"strings"
+)
 
 type customMux struct {
 	getHandler     *http.ServeMux
@@ -11,6 +14,21 @@ type customMux struct {
 	headHandler    *http.ServeMux
 	optionsHandler *http.ServeMux
 	connectHandler *http.ServeMux
+
+	optionsMap map[string][]string
+}
+
+func (mux *customMux) buildOptions() {
+	for path, opts := range mux.optionsMap {
+		mux.optionsHandler = addRoute(mux.optionsHandler, path,
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Allow", strings.Join(opts, ", "))
+				w.Header().Set("Cache-Control", "max-age=86400")
+				w.WriteHeader(http.StatusNoContent)
+			}))
+	}
+
+	clear(mux.optionsMap)
 }
 
 func (mux *customMux) Handle(method string, path string, handler http.Handler) {
@@ -34,6 +52,15 @@ func (mux *customMux) Handle(method string, path string, handler http.Handler) {
 	default:
 		panic("invalid route method")
 	}
+
+	if method != http.MethodOptions {
+		v, ok := mux.optionsMap[path]
+		if !ok {
+			v = append(v, http.MethodOptions)
+		}
+
+		mux.optionsMap[path] = append(v, method)
+	}
 }
 
 func (mux *customMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -51,6 +78,8 @@ func (mux *customMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case http.MethodHead:
 		w = newNilWriter(w)
 		checkHandler(mux.getHandler, w, r)
+	case http.MethodOptions:
+		checkHandler(mux.optionsHandler, w, r)
 	case http.MethodConnect:
 		checkHandler(mux.connectHandler, w, r)
 	default:
@@ -63,7 +92,9 @@ func addRoute(mux *http.ServeMux, path string, handler http.Handler) *http.Serve
 	if mux == nil {
 		mux = http.NewServeMux()
 	}
+
 	mux.Handle(path, handler)
+
 	return mux
 }
 
@@ -73,5 +104,6 @@ func checkHandler(mux *http.ServeMux, w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(http.StatusText(http.StatusNotFound)))
 		return
 	}
+
 	mux.ServeHTTP(w, r)
 }
