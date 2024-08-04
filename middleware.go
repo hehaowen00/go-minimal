@@ -3,7 +3,6 @@ package gominimal
 import (
 	"bytes"
 	"compress/gzip"
-	"io"
 	"net/http"
 	"strings"
 )
@@ -13,22 +12,27 @@ type CorsOptions struct {
 	AllowCredentials bool
 }
 
-func CorsMiddleware(opts CorsOptions, next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if len(opts.AllowedOrigins) == 0 {
-			w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
-		} else {
-			w.Header().Set(
-				"Access-Control-Allow-Origin",
-				strings.Join(opts.AllowedOrigins, ","),
-			)
-		}
+func CorsMiddleware(opts CorsOptions) MiddlewareFunc {
+	return func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if len(opts.AllowedOrigins) == 0 {
+				origin := r.Header.Get("Origin")
+				if origin != "" {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+				}
+			} else {
+				w.Header().Set(
+					"Access-Control-Allow-Origin",
+					strings.Join(opts.AllowedOrigins, ","),
+				)
+			}
 
-		if opts.AllowCredentials {
-			w.Header().Set("Access-Control-Allow-Credentials", "true")
-		}
+			if opts.AllowCredentials {
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+			}
 
-		next(w, r)
+			next(w, r)
+		}
 	}
 }
 
@@ -41,38 +45,60 @@ func GzipMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		writer := tempWriter{
+		writer := gzipWriter{
 			ResponseWriter: w,
-			statusCode:     http.StatusOK,
+		}
+
+		writer.writer = &bufWriter{
+			parent: &writer,
 		}
 
 		next(&writer, r)
-
-		w.WriteHeader(writer.statusCode)
-
-		if writer.buf.Len() < 250 {
-			io.Copy(w, &writer.buf)
-			return
-		}
-
-		w.Header().Add("Content-Encoding", "gzip")
-
-		gz := gzip.NewWriter(w)
-		defer gz.Close()
-		io.Copy(gz, &writer.buf)
+		writer.Close()
 	}
 }
 
-type tempWriter struct {
+type writerStrategy interface {
+	Close() error
+	Write([]byte) (int, error)
+}
+
+type bufWriter struct {
+	parent *gzipWriter
+	buf    bytes.Buffer
+}
+
+func (w *bufWriter) Write(data []byte) (int, error) {
+	n, err := w.buf.Write(data)
+
+	if w.buf.Len() >= 250 {
+		w.parent.useGzip()
+		_, err = w.parent.writer.Write(w.buf.Bytes())
+		w.buf.Reset()
+	}
+
+	return n, err
+}
+
+func (w *bufWriter) Close() error {
+	w.parent.ResponseWriter.Write(w.buf.Bytes())
+	return nil
+}
+
+type gzipWriter struct {
 	http.ResponseWriter
-	statusCode int
-	buf        bytes.Buffer
+	writer writerStrategy
 }
 
-func (w *tempWriter) WriteHeader(status int) {
-	w.statusCode = status
+func (w *gzipWriter) useGzip() {
+	w.ResponseWriter.Header().Set("Content-Encoding", "gzip")
+	w.writer = gzip.NewWriter(w.ResponseWriter)
 }
 
-func (w *tempWriter) Write(b []byte) (int, error) {
-	return w.buf.Write(b)
+func (w *gzipWriter) Write(data []byte) (int, error) {
+	return w.writer.Write(data)
+}
+
+func (w *gzipWriter) Close() {
+	w.writer.Close()
 }
