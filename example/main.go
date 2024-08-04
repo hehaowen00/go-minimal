@@ -4,6 +4,8 @@ import (
 	minimal "go-minimal"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"time"
 )
 
@@ -26,7 +28,7 @@ func main() {
 
 	router.Use(minimal.CorsMiddleware(minimal.CorsOptions{
 		AllowedOrigins: []string{
-			"localhost:8081",
+			"localhost:8080",
 		},
 	}))
 
@@ -44,5 +46,9 @@ func main() {
 		minimal.GzipMiddleware,
 	)
 
-	router.Serve(":8080")
+	go router.Serve(":8080")
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt)
+	<-sig
 }
