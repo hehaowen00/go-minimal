@@ -9,10 +9,6 @@ import (
 	"time"
 )
 
-type Resp struct {
-	Data string `json:"data"`
-}
-
 func main() {
 	router := minimal.NewRouter()
 
@@ -34,12 +30,12 @@ func main() {
 
 	router.GET("/",
 		func(w http.ResponseWriter, r *http.Request) {
-			err := minimal.Marshal(w, http.StatusOK, &Resp{
-				Data: "hello world!",
+			err := minimal.MarshalJSON(w, http.StatusOK, minimal.JSON{
+				"data": "hello, world!",
 			})
 			if err != nil {
 				log.Println(err)
-				minimal.Marshal(w, http.StatusInternalServerError, err.Error())
+				minimal.MarshalJSON(w, http.StatusInternalServerError, err.Error())
 				return
 			}
 		},
