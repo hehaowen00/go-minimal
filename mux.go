@@ -31,7 +31,7 @@ func (mux *customMux) buildOptions() {
 	clear(mux.optionsMap)
 }
 
-func (mux *customMux) Handle(method string, path string, handler http.Handler) {
+func (mux *customMux) handle(method string, path string, handler http.Handler) {
 	switch method {
 	case http.MethodGet:
 		mux.getHandler = addRoute(mux.getHandler, path, handler)

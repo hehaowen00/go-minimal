@@ -20,24 +20,15 @@ func NewRouter() *Router {
 	}
 }
 
+func (r *Router) Handler() http.Handler {
+	mux := r.mux
+	mux.buildOptions()
+	r.mux = nil
+	return mux
+}
+
 func (r *Router) Use(middleware MiddlewareFunc) {
 	r.middleware = append([]MiddlewareFunc{middleware}, r.middleware...)
-}
-
-func (r *Router) Serve(addr string) error {
-	mux := r.mux
-	mux.buildOptions()
-
-	r.mux = nil
-	return http.ListenAndServe(addr, mux)
-}
-
-func (r *Router) ServeTLS(addr string, cert, key string) error {
-	mux := r.mux
-	mux.buildOptions()
-
-	r.mux = nil
-	return http.ListenAndServeTLS(addr, cert, key, mux)
 }
 
 func (r *Router) GET(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
@@ -98,5 +89,5 @@ func applyMiddleware(
 
 func (r *Router) route(method string, path string, handler http.HandlerFunc) {
 	path = strings.TrimSpace(path)
-	r.mux.Handle(method, path, handler)
+	r.mux.handle(method, path, handler)
 }

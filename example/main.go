@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	minimal "go-minimal"
 	"log"
 	"net/http"
@@ -42,9 +43,27 @@ func main() {
 		minimal.GzipMiddleware,
 	)
 
-	go router.Serve(":8080")
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: router.Handler(),
+	}
+
+	go func() {
+		log.Println("server started", server.Addr)
+
+		if err := server.ListenAndServe(); err != nil {
+			log.Fatalln(err)
+		}
+	}()
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)
 	<-sig
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatalf("server shutdown error - %v", err)
+	}
 }
