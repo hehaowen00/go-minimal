@@ -30,7 +30,7 @@ func main() {
 		},
 	}))
 
-	router.GET("/",
+	router.Get("/",
 		func(w http.ResponseWriter, r *http.Request) {
 			err := minimal.MarshalJSON(w, http.StatusOK, minimal.JSON{
 				"data": "hello, world!",
@@ -43,6 +43,12 @@ func main() {
 		},
 		minimal.GzipMiddleware,
 	)
+
+	testGroup := router.Group("/test")
+
+	testGroup.Get("/hello", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello, World!"))
+	})
 
 	server := &http.Server{
 		Addr:    ":8080",

@@ -2,73 +2,103 @@ package gominimal
 
 import (
 	"net/http"
-	"strings"
+	"net/url"
 )
 
 type MiddlewareFunc func(next http.HandlerFunc) http.HandlerFunc
 
-type Router struct {
+type router struct {
 	mux        *customMux
 	middleware []MiddlewareFunc
+	basePath   string
 }
 
-func NewRouter() *Router {
-	return &Router{
+type IRouter interface {
+	Get(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc)
+	Post(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc)
+	Patch(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc)
+	Put(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc)
+	Delete(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc)
+
+	// Head(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc)
+	// Options(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc)
+	// Connect(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc)
+
+	Group(path string, subgroup ...bool) IRouter
+}
+
+func NewRouter() *router {
+	return &router{
 		mux: &customMux{
 			optionsMap: make(map[string][]string),
 		},
 	}
 }
 
-func (r *Router) Handler() http.Handler {
+func (r *router) Handler() http.Handler {
 	mux := r.mux
 	mux.buildOptions()
 	r.mux = nil
 	return mux
 }
 
-func (r *Router) Use(middleware MiddlewareFunc) {
+func (r *router) Use(middleware MiddlewareFunc) {
 	r.middleware = append([]MiddlewareFunc{middleware}, r.middleware...)
 }
 
-func (r *Router) GET(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
+func (r *router) Get(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
 	handler = applyMiddleware(handler, middleware, r.middleware)
-	r.route(http.MethodGet, path, handler)
+	r.route(http.MethodGet, r.basePath, path, handler)
 }
 
-func (r *Router) POST(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
+func (r *router) Post(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
 	handler = applyMiddleware(handler, middleware, r.middleware)
-	r.route(http.MethodPost, path, handler)
+	r.route(http.MethodPost, r.basePath, path, handler)
 }
 
-func (r *Router) PUT(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
+func (r *router) Put(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
 	handler = applyMiddleware(handler, middleware, r.middleware)
-	r.route(http.MethodPut, path, handler)
+	r.route(http.MethodPut, r.basePath, path, handler)
 }
 
-func (r *Router) PATCH(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
+func (r *router) Patch(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
 	handler = applyMiddleware(handler, middleware, r.middleware)
-	r.route(http.MethodPatch, path, handler)
+	r.route(http.MethodPatch, r.basePath, path, handler)
 }
 
-func (r *Router) DELETE(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
+func (r *router) Delete(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
 	handler = applyMiddleware(handler, middleware, r.middleware)
-	r.route(http.MethodDelete, path, handler)
+	r.route(http.MethodDelete, r.basePath, path, handler)
 }
 
-func (r *Router) HEAD(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
-	handler = applyMiddleware(handler, middleware, r.middleware)
-	r.route(http.MethodHead, path, handler)
-}
+// func (r *router) Head(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
+// 	handler = applyMiddleware(handler, middleware, r.middleware)
+// 	r.route(http.MethodGet, r.basePath, path, handler)
+// }
 
-func (r *Router) OPTIONS(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
-	handler = applyMiddleware(handler, middleware, r.middleware)
-	r.route(http.MethodOptions, path, handler)
-}
+// func (r *router) Options(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
+// 	handler = applyMiddleware(handler, middleware, r.middleware)
+// 	r.route(http.MethodGet, r.basePath, path, handler)
+// }
 
-func (r *Router) CONNECT(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
-	handler = applyMiddleware(handler, middleware, r.middleware)
-	r.route(http.MethodConnect, path, handler)
+// func (r *router) Connect(path string, handler http.HandlerFunc, middleware ...MiddlewareFunc) {
+// 	handler = applyMiddleware(handler, middleware, r.middleware)
+// 	r.route(http.MethodGet, r.basePath, path, handler)
+// }
+
+func (r *router) Group(path string, subgroup ...bool) IRouter {
+	var middlewares []MiddlewareFunc
+
+	if len(subgroup) == 1 && subgroup[0] {
+		path, _ = url.JoinPath(r.basePath, path)
+		middlewares = r.middleware
+	}
+
+	newRouter := *r
+	newRouter.basePath = path
+	newRouter.middleware = middlewares
+
+	return &newRouter
 }
 
 func applyMiddleware(
@@ -87,7 +117,11 @@ func applyMiddleware(
 	return handler
 }
 
-func (r *Router) route(method string, path string, handler http.HandlerFunc) {
-	path = strings.TrimSpace(path)
+func (r *router) route(method string, basePath string, path string, handler http.HandlerFunc) {
+	path, err := url.JoinPath(basePath, path)
+	if err != nil {
+		panic(err)
+	}
+
 	r.mux.handle(method, path, handler)
 }
